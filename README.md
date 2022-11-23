@@ -2,7 +2,7 @@
 
 This repo is to demonstrate a two-stage ML web api solution that takes the title and transcript body of a podcast and outputs the top 5 highlights.
 
-## Two-stage ML solution:
+## Two-stage ML solution
 1) Okapi Best Matching (BM25) 
 2) MSMARCO Distilbert
 

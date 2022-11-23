@@ -2,9 +2,11 @@
 
 This repo is to demonstrate a two-stage ML web api solution that takes the title and transcript body of a podcast and outputs the top 5 highlights.
 
-Two-stage ML solution:
+## Two-stage ML solution:
 1) Okapi Best Matching (BM25) 
 2) MSMARCO Distilbert
+
+BM25 is used to rank the sentences in the transcript that represent the entire transcript. A distilbert model is then used to re-rank the BM25 sentences as the most relevant. The concept of re-rank here can be built upon as I only compute the cosine similarity between top 10 BM25 output embeddings with the title embedding. Ideally, I would build a BERT classification model that predicts whether a sentence in the transcript is relevant or not.
 
 The app can be tested by cloning this repo via command line, moving to the cloned directory in local computer, and running the DockerFile.
 ```

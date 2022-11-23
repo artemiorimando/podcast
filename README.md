@@ -38,3 +38,6 @@ Note that the 'transcript' field is not the full body of text - truncated for di
   ]
 }
 ```
+
+## References
+[Spotify Podcast Segment Retrieval](https://trec.nist.gov/pubs/trec29/papers/Spotify.P.pdf)

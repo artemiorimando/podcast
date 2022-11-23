@@ -13,6 +13,9 @@ docker build -t podcast -f Dockerfile .
 docker run -p 8000:8000 podcast
 ```
 
+## /predict POST Endpoint
+FastAPI is used to build the web app. You can view it in main.py script in the src folder. The endpoint takes in two fields, "title" and "transcript" and outputs two fields, "title" and "summary".
+
 ## Example Request Body
 Note that the 'transcript' field is not the full body of text - truncated for display here.
 

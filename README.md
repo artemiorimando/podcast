@@ -1,43 +1,134 @@
-# podcast repo
+# Podcast Highlight Extractor
 
-This repo is to demonstrate a two-stage ML web api solution that takes the title and transcript body of a podcast and outputs the top 5 highlights.
+A two-stage NLP pipeline that extracts the most relevant highlights from podcast transcripts using BM25 lexical ranking and MSMARCO DistilBERT semantic re-ranking.
 
-## Two-stage ML solution
-1) Okapi Best Matching (BM25) 
-2) MSMARCO Distilbert
-
-BM25 is used to rank the sentences in the transcript that represent the entire transcript. A distilbert model is then used to re-rank the BM25 sentences as the most relevant. The concept of re-rank here can be built upon as I only compute the cosine similarity between top 10 BM25 output embeddings with the title embedding. Ideally, I would build a BERT classification model that predicts whether a sentence in the transcript is relevant or not.
-
-The app can be tested by cloning this repo via command line, moving to the cloned directory in local computer, and running the DockerFile.
-```
-docker build -t podcast -f Dockerfile .
-
-docker run -p 8000:8000 podcast
-```
-
-## /predict POST Endpoint
-FastAPI is used to build the web app. You can view it in main.py script in the src folder. The endpoint takes in two fields, "title" and "transcript" and outputs two fields, "title" and "summary".
-
-## Example Request Body
-Note that the 'transcript' field is not the full body of text - truncated for display here.
+## Architecture
 
 ```
-{"title": "invisible matters of time", "transcript": "This is ninety nine percent, invisible, I'm Roman Mars for the most board. We take time for granted. Maybe we don't have enough of it, but at least we know how it works. At least you know most of the time a lot of what we think about time and and how we keep track of. It is relatively recent and some aspects that we take for granted aren't actually all that universal and today we're going to be talking to a few of my young colleagues for a set of many stories about our evolving relationship with time and to get US started..."}
+                        ┌─────────────────────────────────────────┐
+                        │          Podcast Transcript              │
+                        └──────────────────┬──────────────────────┘
+                                           │
+                              ┌─────────────▼─────────────┐
+                              │   NLTK Sentence Tokenizer  │
+                              └─────────────┬─────────────┘
+                                            │
+                  ┌─────────────────────────▼─────────────────────────┐
+                  │  Stage 1: BM25 Lexical Ranking                    │
+                  │  Score each sentence against the title query      │
+                  │  Select top 10 candidates                         │
+                  └─────────────────────────┬─────────────────────────┘
+                                            │
+                  ┌─────────────────────────▼─────────────────────────┐
+                  │  Stage 2: DistilBERT Semantic Re-ranking          │
+                  │  Encode title + candidates as dense embeddings    │
+                  │  Rank by cosine similarity                        │
+                  │  Return top 5 highlights                          │
+                  └─────────────────────────┬─────────────────────────┘
+                                            │
+                              ┌─────────────▼─────────────┐
+                              │     Top 5 Highlights       │
+                              └───────────────────────────┘
 ```
 
-## Example Response Body
-```
+## How It Works
+
+### Stage 1 — BM25 (Custom Implementation)
+
+The pipeline uses a **from-scratch implementation** of the Okapi BM25 ranking algorithm — no external BM25 library is used. BM25 scores each transcript sentence against the podcast title as a query, combining:
+
+- **Term Frequency (TF)** — how often query terms appear in each sentence
+- **Inverse Document Frequency (IDF)** — downweights common terms across the corpus
+- **Length normalization** — adjusts for sentence length to avoid bias toward longer sentences
+
+The top 10 sentences by BM25 score are passed to Stage 2.
+
+### Stage 2 — MSMARCO DistilBERT Re-ranking
+
+The BM25 candidates are re-ranked using `msmarco-distilbert-base-tas-b`, a sentence-transformer model trained on the MS MARCO passage retrieval dataset. The model encodes the title and each candidate sentence into dense vector embeddings, then ranks by **cosine similarity** — capturing semantic meaning that BM25's lexical matching misses.
+
+## API Reference
+
+### `POST /predict`
+
+**Request:**
+```json
 {
   "title": "invisible matters of time",
-  "summary": [
+  "transcript": "This is ninety nine percent, invisible, I'm Roman Mars for the most board. We take time for granted. Maybe we don't have enough of it, but at least we know how it works..."
+}
+```
+
+**Response:**
+```json
+{
+  "title": "invisible matters of time",
+  "highlights": [
     "At least you know most of the time a lot of what we think about time and and how we keep track of.",
     "I mean when you think about the history of the implementation of one time zone.",
     "It is interesting to me that the time of day actually depended on the ethnicity of who you were asking.",
     "Then I started noticing that the time that they used the numbers they used for time were two hours off that of facing time.",
-    "So time is just one example of how these you know intimate parts of weaker culture being suppressed, it's a sign of them, potentially being separatists of being."
+    "So time is just one example of how these you know intimate parts of weaker culture being suppressed."
   ]
 }
 ```
 
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| API Framework | FastAPI + Uvicorn |
+| Lexical Ranking | Custom BM25 implementation |
+| Semantic Re-ranking | MSMARCO DistilBERT (sentence-transformers) |
+| Tokenization | NLTK sentence tokenizer |
+| Containerization | Docker |
+| Validation | Pydantic |
+
+## Quick Start
+
+```bash
+# Build the Docker image (downloads the DistilBERT model at build time)
+docker build -t podcast-highlights .
+
+# Run the container
+docker run -p 8000:8000 podcast-highlights
+
+# Test the API
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"title": "your podcast title", "transcript": "full transcript text..."}'
+```
+
+Interactive API docs available at `http://localhost:8000/docs`.
+
+## Project Structure
+
+```
+podcast/
+├── src/
+│   ├── __init__.py
+│   ├── main.py          # FastAPI application and endpoint
+│   ├── model.py          # BM25 + DistilBERT pipeline
+│   └── schemas.py        # Pydantic request/response models
+├── Dockerfile
+├── requirements.txt
+├── LICENSE
+├── .gitignore
+└── README.md
+```
+
 ## References
-[Spotify Podcast Segment Retrieval](https://trec.nist.gov/pubs/trec29/papers/Spotify.P.pdf)
+
+- Robertson, S.E. et al. (1995). *Okapi at TREC-3.* — Original BM25 paper
+- [Spotify Podcast Segment Retrieval](https://trec.nist.gov/pubs/trec29/papers/Spotify.P.pdf) — TREC 2020 podcast track
+- [MSMARCO DistilBERT](https://huggingface.co/sentence-transformers/msmarco-distilbert-base-tas-b) — Pre-trained retrieval model
+
+## Future Improvements
+
+- Train a BERT classification model that predicts whether a sentence is a highlight (binary relevance) rather than relying on cosine similarity
+- Add timestamp mapping to link highlights back to specific podcast moments
+- Support batch processing of multiple episodes
+
+## License
+
+MIT
